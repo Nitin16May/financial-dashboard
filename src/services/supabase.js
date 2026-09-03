@@ -1,25 +1,62 @@
 import { categorizeTransaction, CATEGORIES, cleanMerchantName } from '../utils/categorizer';
 
-const SUPABASE_URL = 'https://bprkehilaayfrhcxyrtc.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_8_tyzFQcB5j1FChrcSmRLg_CWPw8TwF';
+const DEFAULT_SUPABASE_URL = 'https://bprkehilaayfrhcxyrtc.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_8_tyzFQcB5j1FChrcSmRLg_CWPw8TwF';
 
-const LOCAL_STORAGE_KEY = 'fin_dashboard_transactions_cache_v1';
+const CONFIG_STORAGE_KEY = 'fin_dashboard_supabase_config_v1';
+const CACHE_STORAGE_KEY = 'fin_dashboard_transactions_cache_v1';
+
+export function getStoredCredentials() {
+  try {
+    const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        url: parsed.url || DEFAULT_SUPABASE_URL,
+        key: parsed.key || DEFAULT_SUPABASE_KEY,
+        userId: parsed.userId || 'nitin'
+      };
+    }
+  } catch (e) {
+    console.warn('Failed to parse stored credentials', e);
+  }
+  return {
+    url: DEFAULT_SUPABASE_URL,
+    key: DEFAULT_SUPABASE_KEY,
+    userId: 'nitin'
+  };
+}
+
+export function saveCredentials(config) {
+  try {
+    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+  } catch (e) {
+    console.warn('Failed to save credentials', e);
+  }
+}
+
+export function resetCredentials() {
+  localStorage.removeItem(CONFIG_STORAGE_KEY);
+}
 
 export async function fetchTransactions() {
+  const creds = getStoredCredentials();
+  const cleanUrl = creds.url.replace(/\/+$/, '');
+
   try {
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/transactions?select=*&order=date.desc`,
+      `${cleanUrl}/rest/v1/transactions?select=*&order=date.desc`,
       {
         headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
+          apikey: creds.key,
+          Authorization: `Bearer ${creds.key}`,
           Range: '0-1500'
         }
       }
     );
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP ${response.status}: Failed to fetch transactions`);
     }
 
     const rawData = await response.json();
@@ -38,9 +75,9 @@ export async function fetchTransactions() {
 
     // Cache locally
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(enrichedData));
+      localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(enrichedData));
     } catch (e) {
-      console.warn('LocalStorage save failed', e);
+      console.warn('LocalStorage cache failed', e);
     }
 
     return enrichedData;
@@ -48,7 +85,7 @@ export async function fetchTransactions() {
     console.error('Failed to fetch live transactions from Supabase:', error);
     
     // Fallback to local cache if offline or error
-    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const cached = localStorage.getItem(CACHE_STORAGE_KEY);
     if (cached) {
       console.info('Serving transactions from local cache');
       return JSON.parse(cached);
