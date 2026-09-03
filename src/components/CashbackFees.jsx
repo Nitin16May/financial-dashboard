@@ -49,7 +49,6 @@ export default function CashbackFees({ transactions }) {
       // Check if fee/charge
       const isFee = (
         name.includes('FEE') ||
-        name.includes('GST') ||
         name.includes('CHARGE') ||
         name.includes('ANNUAL') ||
         name.includes('JOINING') ||
@@ -57,6 +56,7 @@ export default function CashbackFees({ transactions }) {
         name.includes('PENALTY') ||
         (name.includes('INTEREST') && amt < 0)
       );
+
 
       // Check if cashback/refund/reward
       const isCashback = (
@@ -152,7 +152,7 @@ export default function CashbackFees({ transactions }) {
             <span>Cashbacks, Rewards & Card Fees Tracker</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Audit credit card joining fees, GST charges, fuel cashbacks, refunds, and interest earnings
+            Audit credit card joining fees, processing charges, fuel cashbacks, refunds, and interest earnings
           </p>
         </div>
 
@@ -187,7 +187,7 @@ export default function CashbackFees({ transactions }) {
         {/* Total Card Fees & Charges */}
         <div className="glass-panel glass-panel-hover p-5 rounded-2xl relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fees, Charges & GST</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fees & Charges</span>
             <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
               <Receipt className="w-5 h-5" />
             </div>
@@ -196,7 +196,7 @@ export default function CashbackFees({ transactions }) {
             -₹{analytics.totalFees.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
           </div>
           <span className="text-xs text-slate-400 font-medium">
-            {analytics.fees.length} joining fee & tax entries
+            {analytics.fees.length} joining fee & charge entries
           </span>
         </div>
 
@@ -240,7 +240,7 @@ export default function CashbackFees({ transactions }) {
         {/* Monthly Cashback vs Fees Bar Chart */}
         <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-white/10">
           <h3 className="text-lg font-bold text-white mb-1">Monthly Cashbacks vs Fees</h3>
-          <p className="text-xs text-slate-400 mb-4">Tracking monthly reward credits against card fees & taxes</p>
+          <p className="text-xs text-slate-400 mb-4">Tracking monthly reward credits against card fees & charges</p>
 
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -251,7 +251,7 @@ export default function CashbackFees({ transactions }) {
                 <Tooltip content={<CashbackFeeTooltip />} />
                 <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />
                 <Bar dataKey="cashback" name="Cashback & Refunds (₹)" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="fee" name="Fees & GST (₹)" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="fee" name="Card Fees (₹)" fill="#ef4444" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="interest" name="Interest Credit (₹)" fill="#6366f1" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -298,7 +298,7 @@ export default function CashbackFees({ transactions }) {
             {[
               { id: 'ALL', label: 'All Entries' },
               { id: 'CASHBACKS', label: 'Cashbacks' },
-              { id: 'FEES', label: 'Fees & GST' },
+              { id: 'FEES', label: 'Card Fees' },
               { id: 'INTEREST', label: 'Interest' }
             ].map((tab) => (
               <button
@@ -315,6 +315,7 @@ export default function CashbackFees({ transactions }) {
             ))}
           </div>
         </div>
+
 
         <div className="overflow-x-auto rounded-xl border border-white/10">
           <table className="w-full text-left text-xs">
