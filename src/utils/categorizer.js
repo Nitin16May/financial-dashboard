@@ -228,6 +228,26 @@ export function cleanMerchantName(rawName) {
   if (!rawName) return 'Unknown Merchant';
   let clean = rawName;
 
+  const upper = rawName.toUpperCase();
+
+  // Brand Standardizations
+  if (upper.includes('SWIGGY')) return 'Swiggy';
+  if (upper.includes('ZEPTO')) return 'Zepto';
+  if (upper.includes('FLIPKART')) return 'Flipkart';
+  if (upper.includes('AMAZON')) return 'Amazon';
+  if (upper.includes('NETFLIX')) return 'Netflix';
+  if (upper.includes('IRCTC')) return 'IRCTC';
+  if (upper.includes('DOMINOS')) return 'Dominos';
+  if (upper.includes('ZOMATO')) return 'Zomato';
+  if (upper.includes('THEOBROMA')) return 'Theobroma';
+  if (upper.includes('VIJETHA')) return 'Vijetha Supermarket';
+  if (upper.includes('TANISHQ')) return 'Tanishq';
+  if (upper.includes('TITAN')) return 'Titan';
+  if (upper.includes('VIJAY SALES')) return 'Vijay Sales';
+  if (upper.includes('JIO') || upper.includes('RELIANCE JIO')) return 'Jio';
+  if (upper.includes('BIGTREE') || upper.includes('BOOKMYSHOW')) return 'BookMyShow';
+  if (upper.includes('FABRIC FRESH')) return 'Fabric Fresh Laundry';
+
   // Extract merchant name from UPI patterns e.g., UPI/P2M/12345/Merchant Name/UPI/BANK
   if (clean.includes('UPI/P2M/') || clean.includes('UPI/P2A/')) {
     const parts = clean.split('/');
@@ -246,6 +266,9 @@ export function cleanMerchantName(rawName) {
     .replace(/\/ICICI Bank.*$/, '')
     .replace(/,HYDERABAD/gi, '')
     .replace(/,BENGALURU/gi, '')
+    .replace(/Limited/gi, '')
+    .replace(/Marketplace Pri/gi, '')
+    .replace(/Marketplace/gi, '')
     .trim();
 
   return clean || rawName;
