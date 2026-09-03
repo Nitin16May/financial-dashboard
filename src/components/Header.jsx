@@ -34,8 +34,9 @@ export default function Header({
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'merchant', label: 'Spend by Merchant', icon: Store },
+    { id: 'merchant', label: 'Sources & Merchants', icon: Store },
     { id: 'cashback', label: 'Cashback & Fees', icon: Gift },
+
     { id: 'category', label: 'Category Deep-Dive', icon: PieChart },
     { id: 'monthly', label: 'Date-to-Date Stats', icon: CalendarRange },
     { id: 'transactions', label: 'All Transactions', icon: ReceiptText }

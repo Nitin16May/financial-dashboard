@@ -230,7 +230,9 @@ export function cleanMerchantName(rawName) {
 
   const upper = rawName.toUpperCase();
 
-  // Brand Standardizations
+  // Brand Standardizations & Income Sources
+  if (upper.includes('D E SHAW')) return 'D E Shaw (Salary)';
+  if (upper.includes('MB PAYMENT')) return 'MB Payment';
   if (upper.includes('SWIGGY')) return 'Swiggy';
   if (upper.includes('ZEPTO')) return 'Zepto';
   if (upper.includes('FLIPKART')) return 'Flipkart';
@@ -247,6 +249,7 @@ export function cleanMerchantName(rawName) {
   if (upper.includes('JIO') || upper.includes('RELIANCE JIO')) return 'Jio';
   if (upper.includes('BIGTREE') || upper.includes('BOOKMYSHOW')) return 'BookMyShow';
   if (upper.includes('FABRIC FRESH')) return 'Fabric Fresh Laundry';
+
 
   // Extract merchant name from UPI patterns e.g., UPI/P2M/12345/Merchant Name/UPI/BANK
   if (clean.includes('UPI/P2M/') || clean.includes('UPI/P2A/')) {
