@@ -1,19 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { 
+  TrendingUp, 
+  TrendingDown, 
+  Briefcase, 
   Store, 
   Search, 
   ArrowUpDown, 
   ChevronRight, 
-  Calendar, 
-  Receipt, 
-  TrendingDown, 
-  TrendingUp,
-  X, 
   ArrowLeft,
-  Filter,
   BarChart3,
-  Briefcase,
-  Wallet
+  ArrowUpRight,
+  ArrowDownRight
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -25,86 +22,109 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 
-export default function MerchantAnalytics({ transactions, initialMerchant = null, initialType = 'EXPENSE' }) {
-  const [viewType, setViewType] = useState('EXPENSE'); // 'EXPENSE' (Spending) | 'INCOME' (Salary/Credits)
+export default function MerchantAnalytics({ transactions, initialEntity = null }) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortField, setSortField] = useState('totalAmount'); // totalAmount | count | avgAmount | name
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [selectedEntity, setSelectedEntity] = useState(initialMerchant);
+  const [selectedEntity, setSelectedEntity] = useState(initialEntity);
 
-  // Group transactions by Name based on viewType (INCOME vs EXPENSE)
-  const entitySummary = useMemo(() => {
-    const map = {};
-    let grandTotal = 0;
+  // Group transactions by Name for BOTH Inflows (amount > 0) and Outflows (amount < 0)
+  const analytics = useMemo(() => {
+    const inflowMap = {};
+    const outflowMap = {};
+    let totalInflow = 0;
+    let totalOutflow = 0;
 
     transactions.forEach(t => {
+      const amt = Math.abs(t.amount);
+      const name = t.cleanName || t.name || 'Unknown';
       const isIncome = t.amount > 0;
-      const matchesType = (viewType === 'INCOME' && isIncome) || (viewType === 'EXPENSE' && !isIncome);
 
-      if (matchesType) {
-        const amt = Math.abs(t.amount);
-        const name = t.cleanName || t.name || 'Unknown';
-        grandTotal += amt;
-
-        if (!map[name]) {
-          map[name] = {
+      if (isIncome) {
+        totalInflow += amt;
+        if (!inflowMap[name]) {
+          inflowMap[name] = {
             name,
             count: 0,
             totalAmount: 0,
             transactions: [],
             accounts: new Set(),
             firstDate: t.date,
-            lastDate: t.date
+            lastDate: t.date,
+            isIncome: true
           };
         }
-
-        const e = map[name];
+        const e = inflowMap[name];
         e.count += 1;
         e.totalAmount += amt;
         e.transactions.push(t);
         if (t.account) e.accounts.add(t.account);
-
+        if (t.date < e.firstDate) e.firstDate = t.date;
+        if (t.date > e.lastDate) e.lastDate = t.date;
+      } else {
+        totalOutflow += amt;
+        if (!outflowMap[name]) {
+          outflowMap[name] = {
+            name,
+            count: 0,
+            totalAmount: 0,
+            transactions: [],
+            accounts: new Set(),
+            firstDate: t.date,
+            lastDate: t.date,
+            isIncome: false
+          };
+        }
+        const e = outflowMap[name];
+        e.count += 1;
+        e.totalAmount += amt;
+        e.transactions.push(t);
+        if (t.account) e.accounts.add(t.account);
         if (t.date < e.firstDate) e.firstDate = t.date;
         if (t.date > e.lastDate) e.lastDate = t.date;
       }
     });
 
-    const list = Object.values(map).map(e => {
-      const avgAmount = e.count > 0 ? e.totalAmount / e.count : 0;
-      const pctOfTotal = grandTotal > 0 ? ((e.totalAmount / grandTotal) * 100).toFixed(1) : 0;
-      return {
-        ...e,
-        avgAmount,
-        pctOfTotal: parseFloat(pctOfTotal),
-        accountList: Array.from(e.accounts).join(', ')
-      };
-    });
+    const formatList = (map, total) => {
+      return Object.values(map)
+        .map(e => ({
+          ...e,
+          avgAmount: e.count > 0 ? e.totalAmount / e.count : 0,
+          pctOfTotal: total > 0 ? parseFloat(((e.totalAmount / total) * 100).toFixed(1)) : 0,
+          accountList: Array.from(e.accounts).join(', ')
+        }))
+        .sort((a, b) => b.totalAmount - a.totalAmount);
+    };
 
-    return { list, grandTotal };
-  }, [transactions, viewType]);
+    const inflows = formatList(inflowMap, totalInflow);
+    const outflows = formatList(outflowMap, totalOutflow);
 
-  // Filtered & Sorted Entities List
-  const processedEntities = useMemo(() => {
-    return entitySummary.list
-      .filter(e => {
-        if (!searchTerm) return true;
-        return e.name.toLowerCase().includes(searchTerm.toLowerCase());
-      })
-      .sort((a, b) => {
-        let valA = a[sortField];
-        let valB = b[sortField];
-        if (typeof valA === 'string') {
-          return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-        }
-        return sortOrder === 'asc' ? valA - valB : valB - valA;
-      });
-  }, [entitySummary.list, searchTerm, sortField, sortOrder]);
+    return {
+      inflows,
+      outflows,
+      totalInflow,
+      totalOutflow,
+      netFlow: totalInflow - totalOutflow,
+      allEntities: [...inflows, ...outflows]
+    };
+  }, [transactions]);
+
+  // Filtered lists by search term
+  const filteredInflows = useMemo(() => {
+    if (!searchTerm) return analytics.inflows;
+    const q = searchTerm.toLowerCase();
+    return analytics.inflows.filter(e => e.name.toLowerCase().includes(q));
+  }, [analytics.inflows, searchTerm]);
+
+  const filteredOutflows = useMemo(() => {
+    if (!searchTerm) return analytics.outflows;
+    const q = searchTerm.toLowerCase();
+    return analytics.outflows.filter(e => e.name.toLowerCase().includes(q));
+  }, [analytics.outflows, searchTerm]);
 
   // Selected Entity Analytics & Monthly Breakdown
   const selectedEntityData = useMemo(() => {
     if (!selectedEntity) return null;
 
-    const eData = entitySummary.list.find(e => e.name === selectedEntity);
+    const eData = analytics.allEntities.find(e => e.name === selectedEntity);
     if (!eData) return null;
 
     // Monthly breakdown for this entity
@@ -132,73 +152,78 @@ export default function MerchantAnalytics({ transactions, initialMerchant = null
       monthlyChartData,
       sortedTxns
     };
-  }, [selectedEntity, entitySummary.list]);
-
-  const toggleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('desc');
-    }
-  };
+  }, [selectedEntity, analytics.allEntities]);
 
   return (
     <div className="space-y-6">
       
-      {/* Page Header & View Switcher */}
-      <div className="glass-panel p-5 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Page Header */}
+      <div className="glass-panel p-5 rounded-2xl border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            {viewType === 'INCOME' ? (
-              <Briefcase className="w-5 h-5 text-emerald-400" />
-            ) : (
-              <Store className="w-5 h-5 text-indigo-400" />
-            )}
-            <span>
-              {viewType === 'INCOME' ? 'Salary & Income Sources' : 'Spending by Merchant'}
-            </span>
+            <Store className="w-5 h-5 text-indigo-400" />
+            <span>Inflows & Outflows Leaderboard</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            GROUP BY Name — {entitySummary.list.length} distinct {viewType === 'INCOME' ? 'income payers / sources' : 'merchants'}
+            1 Unified Page — Grouped by Salary Sources (Inflows) and Merchants (Outflows)
           </p>
         </div>
 
-        {/* Income vs Expense Toggle */}
-        <div className="flex items-center bg-slate-900/90 p-1.5 rounded-xl border border-white/10">
-          <button
-            onClick={() => {
-              setViewType('EXPENSE');
-              setSelectedEntity(null);
-            }}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              viewType === 'EXPENSE'
-                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <TrendingDown className="w-4 h-4 text-rose-400" />
-            <span>Merchants (Outflows)</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setViewType('INCOME');
-              setSelectedEntity(null);
-            }}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              viewType === 'INCOME'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-            <span>Salary & Credits (Inflows)</span>
-          </button>
+        {/* Global Search Bar */}
+        <div className="relative w-full md:w-72">
+          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search salary source or merchant..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="glass-input w-full pl-9 pr-3 py-2 rounded-xl text-xs"
+          />
         </div>
       </div>
 
-      {/* Selected Entity (Salary / Merchant) Deep Dive View */}
+      {/* Top Total Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        {/* Total Inflows Card */}
+        <div className="glass-panel p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Inflows (Income/Credits)</span>
+            <TrendingUp className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div className="text-2xl font-extrabold text-emerald-400">
+            +₹{analytics.totalInflow.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+          </div>
+          <span className="text-xs text-slate-400 font-medium">{analytics.inflows.length} distinct income sources</span>
+        </div>
+
+        {/* Total Outflows Card */}
+        <div className="glass-panel p-5 rounded-2xl border border-rose-500/20 bg-rose-500/5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Outflows (Merchants/Expenses)</span>
+            <TrendingDown className="w-5 h-5 text-rose-400" />
+          </div>
+          <div className="text-2xl font-extrabold text-rose-400">
+            -₹{analytics.totalOutflow.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+          </div>
+          <span className="text-xs text-slate-400 font-medium">{analytics.outflows.length} distinct merchants</span>
+        </div>
+
+        {/* Net Flow Card */}
+        <div className="glass-panel p-5 rounded-2xl border border-indigo-500/20 bg-indigo-500/5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Net Cash Balance Flow</span>
+            <Briefcase className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div className={`text-2xl font-extrabold ${analytics.netFlow >= 0 ? 'text-indigo-300' : 'text-rose-400'}`}>
+            {analytics.netFlow >= 0 ? '+' : ''}₹{analytics.netFlow.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+          </div>
+          <span className="text-xs text-slate-400 font-medium">Income minus Outflows</span>
+        </div>
+
+      </div>
+
+      {/* If an entity is selected, show detail view */}
       {selectedEntityData ? (
         <div className="space-y-6 animate-fadeIn">
           
@@ -209,7 +234,7 @@ export default function MerchantAnalytics({ transactions, initialMerchant = null
               className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-xs font-semibold transition-all"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Back to All {viewType === 'INCOME' ? 'Income Sources' : 'Merchants'}</span>
+              <span>Back to Inflows & Outflows Overview</span>
             </button>
 
             <span className="text-xs text-slate-400">
@@ -217,16 +242,16 @@ export default function MerchantAnalytics({ transactions, initialMerchant = null
             </span>
           </div>
 
-          {/* Stats Header Banner */}
+          {/* Header Banner */}
           <div className={`glass-panel p-6 rounded-2xl border bg-gradient-to-r ${
-            viewType === 'INCOME'
+            selectedEntityData.isIncome
               ? 'border-emerald-500/30 from-emerald-950/30 to-slate-900/80'
-              : 'border-indigo-500/30 from-indigo-950/30 to-slate-900/80'
+              : 'border-rose-500/30 from-rose-950/30 to-slate-900/80'
           }`}>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <span className="text-xs uppercase font-semibold text-slate-400">
-                  {viewType === 'INCOME' ? 'Income Source / Employer' : 'Merchant'}
+                  {selectedEntityData.isIncome ? 'Income Source / Employer' : 'Merchant'}
                 </span>
                 <h3 className="text-2xl font-extrabold text-white mt-0.5">{selectedEntityData.name}</h3>
                 <p className="text-xs text-slate-400 mt-1">{selectedEntityData.accountList}</p>
@@ -234,12 +259,12 @@ export default function MerchantAnalytics({ transactions, initialMerchant = null
 
               <div>
                 <span className="text-xs uppercase font-semibold text-slate-400">
-                  {viewType === 'INCOME' ? 'Total Received' : 'Total Spent'}
+                  {selectedEntityData.isIncome ? 'Total Received' : 'Total Spent'}
                 </span>
-                <div className={`text-2xl font-extrabold mt-0.5 ${viewType === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {viewType === 'INCOME' ? '+' : '-'}₹{selectedEntityData.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                <div className={`text-2xl font-extrabold mt-0.5 ${selectedEntityData.isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {selectedEntityData.isIncome ? '+' : '-'}₹{selectedEntityData.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                 </div>
-                <span className="text-[11px] text-slate-400">{selectedEntityData.pctOfTotal}% of total {viewType === 'INCOME' ? 'income' : 'expenses'}</span>
+                <span className="text-[11px] text-slate-400">{selectedEntityData.pctOfTotal}% of total {selectedEntityData.isIncome ? 'inflows' : 'outflows'}</span>
               </div>
 
               <div>
@@ -247,7 +272,7 @@ export default function MerchantAnalytics({ transactions, initialMerchant = null
                 <div className="text-2xl font-extrabold text-indigo-300 mt-0.5">
                   {selectedEntityData.count} <span className="text-xs font-normal text-slate-400">entries</span>
                 </div>
-                <span className="text-[11px] text-slate-400">Avg ₹{Math.round(selectedEntityData.avgAmount).toLocaleString('en-IN')}/deposit</span>
+                <span className="text-[11px] text-slate-400">Avg ₹{Math.round(selectedEntityData.avgAmount).toLocaleString('en-IN')}/txn</span>
               </div>
 
               <div>
@@ -260,11 +285,11 @@ export default function MerchantAnalytics({ transactions, initialMerchant = null
             </div>
           </div>
 
-          {/* Monthly Trend Chart */}
+          {/* Monthly Chart */}
           <div className="glass-panel p-6 rounded-2xl border border-white/10">
             <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-indigo-400" />
-              <span>Monthly {viewType === 'INCOME' ? 'Income' : 'Spend'} Trend: {selectedEntityData.name}</span>
+              <span>Monthly {selectedEntityData.isIncome ? 'Income' : 'Spend'} Trend: {selectedEntityData.name}</span>
             </h3>
             <p className="text-xs text-slate-400 mb-4">Month-by-month cash flow history</p>
 
@@ -274,8 +299,8 @@ export default function MerchantAnalytics({ transactions, initialMerchant = null
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="label" stroke="#6b7280" tick={{ fill: '#9ca3af', fontSize: 11 }} />
                   <YAxis stroke="#6b7280" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(val) => `₹${(val/1000).toFixed(0)}k`} />
-                  <Tooltip content={<EntityMonthlyTooltip entityName={selectedEntityData.name} isIncome={viewType === 'INCOME'} />} />
-                  <Bar dataKey="amount" fill={viewType === 'INCOME' ? '#10b981' : '#6366f1'} radius={[6, 6, 0, 0]} />
+                  <Tooltip content={<EntityTooltip entityName={selectedEntityData.name} isIncome={selectedEntityData.isIncome} />} />
+                  <Bar dataKey="amount" fill={selectedEntityData.isIncome ? '#10b981' : '#f43f5e'} radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -317,118 +342,149 @@ export default function MerchantAnalytics({ transactions, initialMerchant = null
 
         </div>
       ) : (
-        /* Main Leaderboard Table View */
-        <div className="glass-panel p-6 rounded-2xl border border-white/10 space-y-4">
+        /* Single Page with Inflows & Outflows Tables Side-by-Side / Stacked */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* Controls */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-              <input
-                type="text"
-                placeholder={viewType === 'INCOME' ? "Search employer / salary source..." : "Search merchant name (Zepto, Swiggy)..."}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="glass-input w-full pl-9 pr-3 py-2 rounded-xl text-xs"
-              />
+          {/* SECTION 1: INFLOWS (INCOME & SALARY) */}
+          <div className="glass-panel p-6 rounded-2xl border border-emerald-500/20 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">🟢 Inflows & Salary Sources</h3>
+                  <p className="text-xs text-slate-400">GROUP BY Name for Income (`amount &gt; 0`)</p>
+                </div>
+              </div>
+
+              <span className="text-xs font-extrabold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                {filteredInflows.length} Sources
+              </span>
             </div>
 
-            <div className="text-xs text-slate-400">
-              Total {viewType === 'INCOME' ? 'Income' : 'Outflow'}: <strong className={viewType === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'}>
-                ₹{entitySummary.grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-              </strong>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto rounded-xl border border-white/10">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-white/10">
-                <tr>
-                  <th className="p-3.5 w-12 text-center">#</th>
-                  <th className="p-3.5 cursor-pointer hover:text-white" onClick={() => toggleSort('name')}>
-                    <div className="flex items-center space-x-1">
-                      <span>{viewType === 'INCOME' ? 'Salary Source / Payer Name' : 'Merchant Name'}</span>
-                      <ArrowUpDown className="w-3.5 h-3.5" />
-                    </div>
-                  </th>
-                  <th className="p-3.5 text-center cursor-pointer hover:text-white" onClick={() => toggleSort('count')}>
-                    <div className="flex items-center justify-center space-x-1">
-                      <span>Transactions</span>
-                      <ArrowUpDown className="w-3.5 h-3.5" />
-                    </div>
-                  </th>
-                  <th className="p-3.5 text-right cursor-pointer hover:text-white" onClick={() => toggleSort('totalAmount')}>
-                    <div className="flex items-center justify-end space-x-1">
-                      <span>{viewType === 'INCOME' ? 'Total Received (₹)' : 'Total Spend (₹)'}</span>
-                      <ArrowUpDown className="w-3.5 h-3.5" />
-                    </div>
-                  </th>
-                  <th className="p-3.5 text-right cursor-pointer hover:text-white" onClick={() => toggleSort('avgAmount')}>
-                    <div className="flex items-center justify-end space-x-1">
-                      <span>Avg / Txn (₹)</span>
-                      <ArrowUpDown className="w-3.5 h-3.5" />
-                    </div>
-                  </th>
-                  <th className="p-3.5 text-right">% of Total</th>
-                  <th className="p-3.5 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {processedEntities.length > 0 ? (
-                  processedEntities.map((e, idx) => (
-                    <tr 
-                      key={e.name}
-                      onClick={() => setSelectedEntity(e.name)}
-                      className="hover:bg-white/5 transition-colors cursor-pointer group"
-                    >
-                      <td className="p-3.5 text-center font-bold text-indigo-400 font-mono">
-                        {idx + 1}
-                      </td>
-
-                      <td className="p-3.5 font-bold text-white group-hover:text-indigo-300 transition-colors">
-                        <div className="flex items-center space-x-2">
-                          <span>{e.name}</span>
-                        </div>
-                      </td>
-
-                      <td className="p-3.5 text-center font-mono text-slate-300">
-                        <span className="px-2.5 py-0.5 rounded bg-slate-900 border border-white/10 text-xs font-semibold">
-                          {e.count}
-                        </span>
-                      </td>
-
-                      <td className={`p-3.5 text-right font-mono font-extrabold text-sm ${viewType === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {viewType === 'INCOME' ? '+' : '-'}₹{e.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                      </td>
-
-                      <td className="p-3.5 text-right font-mono text-slate-300">
-                        ₹{Math.round(e.avgAmount).toLocaleString('en-IN')}
-                      </td>
-
-                      <td className="p-3.5 text-right font-mono text-slate-400">
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-semibold">
-                          {e.pctOfTotal}%
-                        </span>
-                      </td>
-
-                      <td className="p-3.5 text-center">
-                        <button className="p-1.5 rounded-lg bg-white/5 group-hover:bg-indigo-600 group-hover:text-white text-slate-400 transition-colors">
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+            <div className="overflow-x-auto rounded-xl border border-white/10">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-white/10">
+                  <tr>
+                    <th className="p-3 w-10 text-center">#</th>
+                    <th className="p-3">Salary Source / Payer</th>
+                    <th className="p-3 text-center">Count</th>
+                    <th className="p-3 text-right">Received (₹)</th>
+                    <th className="p-3 text-right">% Inc</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filteredInflows.length > 0 ? (
+                    filteredInflows.map((e, idx) => (
+                      <tr 
+                        key={e.name}
+                        onClick={() => setSelectedEntity(e.name)}
+                        className="hover:bg-white/5 transition-colors cursor-pointer group"
+                      >
+                        <td className="p-3 text-center font-bold text-emerald-400 font-mono">
+                          {idx + 1}
+                        </td>
+                        <td className="p-3 font-bold text-white group-hover:text-emerald-300 transition-colors">
+                          {e.name}
+                        </td>
+                        <td className="p-3 text-center font-mono">
+                          <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300 text-[11px]">
+                            {e.count}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right font-mono font-extrabold text-emerald-400">
+                          +₹{e.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </td>
+                        <td className="p-3 text-right font-mono text-slate-400">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">
+                            {e.pctOfTotal}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-500">
+                        No income sources found matching search.
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="p-12 text-center text-slate-500">
-                      No entries found matching your search.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {/* SECTION 2: OUTFLOWS (SPENDING BY MERCHANT) */}
+          <div className="glass-panel p-6 rounded-2xl border border-rose-500/20 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400">
+                  <TrendingDown className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">🔴 Outflows & Merchants</h3>
+                  <p className="text-xs text-slate-400">GROUP BY Name for Spending (`amount &lt; 0`)</p>
+                </div>
+              </div>
+
+              <span className="text-xs font-extrabold text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/20">
+                {filteredOutflows.length} Merchants
+              </span>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-white/10">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-white/10">
+                  <tr>
+                    <th className="p-3 w-10 text-center">#</th>
+                    <th className="p-3">Merchant Name</th>
+                    <th className="p-3 text-center">Count</th>
+                    <th className="p-3 text-right">Spent (₹)</th>
+                    <th className="p-3 text-right">% Out</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filteredOutflows.length > 0 ? (
+                    filteredOutflows.map((e, idx) => (
+                      <tr 
+                        key={e.name}
+                        onClick={() => setSelectedEntity(e.name)}
+                        className="hover:bg-white/5 transition-colors cursor-pointer group"
+                      >
+                        <td className="p-3 text-center font-bold text-indigo-400 font-mono">
+                          {idx + 1}
+                        </td>
+                        <td className="p-3 font-bold text-white group-hover:text-indigo-300 transition-colors">
+                          {e.name}
+                        </td>
+                        <td className="p-3 text-center font-mono">
+                          <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300 text-[11px]">
+                            {e.count}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right font-mono font-extrabold text-rose-400">
+                          -₹{e.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </td>
+                        <td className="p-3 text-right font-mono text-slate-400">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">
+                            {e.pctOfTotal}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-500">
+                        No merchants found matching search.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       )}
 
@@ -436,13 +492,13 @@ export default function MerchantAnalytics({ transactions, initialMerchant = null
   );
 }
 
-function EntityMonthlyTooltip({ active, payload, entityName, isIncome }) {
+function EntityTooltip({ active, payload, entityName, isIncome }) {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
       <div className="bg-slate-900 border border-white/15 p-3 rounded-xl shadow-2xl text-xs space-y-1">
         <p className="font-bold text-slate-200">{entityName} - {data.label}</p>
-        <p className={`font-extrabold ${isIncome ? 'text-emerald-400' : 'text-indigo-400'}`}>
+        <p className={`font-extrabold ${isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
           {isIncome ? 'Received: +' : 'Spent: -'}₹{data.amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
         </p>
         <p className="text-slate-400">{data.count} transactions</p>
