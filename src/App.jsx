@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Header from './components/Header';
 import DashboardOverview from './components/DashboardOverview';
 import MerchantAnalytics from './components/MerchantAnalytics';
+import CashbackFees from './components/CashbackFees';
 import CategoryDeepDive from './components/CategoryDeepDive';
 import MonthlyComparison from './components/MonthlyComparison';
 import TransactionsTable from './components/TransactionsTable';
 import { fetchTransactions } from './services/supabase';
 import { AlertCircle, RefreshCw, Layers } from 'lucide-react';
+
 
 export default function App() {
   const [allTransactions, setAllTransactions] = useState([]);
@@ -171,12 +173,19 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'cashback' && (
+              <CashbackFees
+                transactions={filteredTransactions}
+              />
+            )}
+
             {activeTab === 'category' && (
               <CategoryDeepDive
                 transactions={filteredTransactions}
                 initialCategoryId={selectedCategoryId}
               />
             )}
+
 
 
             {activeTab === 'monthly' && (
