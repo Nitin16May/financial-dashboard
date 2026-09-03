@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Header from './components/Header';
 import DashboardOverview from './components/DashboardOverview';
+import MerchantAnalytics from './components/MerchantAnalytics';
 import CategoryDeepDive from './components/CategoryDeepDive';
 import MonthlyComparison from './components/MonthlyComparison';
 import TransactionsTable from './components/TransactionsTable';
@@ -16,6 +17,8 @@ export default function App() {
   // App Navigation State
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedCategoryId, setSelectedCategoryId] = useState('FOOD');
+  const [selectedMerchant, setSelectedMerchant] = useState(null);
+
 
   // Date Filtering State
   const [datePreset, setDatePreset] = useState('ALL');
@@ -154,6 +157,17 @@ export default function App() {
               <DashboardOverview
                 transactions={filteredTransactions}
                 onSelectCategory={handleSelectCategory}
+                onSelectMerchant={(m) => {
+                  setSelectedMerchant(m);
+                  setActiveTab('merchant');
+                }}
+              />
+            )}
+
+            {activeTab === 'merchant' && (
+              <MerchantAnalytics
+                transactions={filteredTransactions}
+                initialMerchant={selectedMerchant}
               />
             )}
 
@@ -163,6 +177,7 @@ export default function App() {
                 initialCategoryId={selectedCategoryId}
               />
             )}
+
 
             {activeTab === 'monthly' && (
               <MonthlyComparison

@@ -27,8 +27,9 @@ import {
 } from 'recharts';
 import { CATEGORIES } from '../utils/categorizer';
 
-export default function DashboardOverview({ transactions, onSelectCategory }) {
+export default function DashboardOverview({ transactions, onSelectCategory, onSelectMerchant }) {
   // Aggregate KPIs
+
   const stats = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -358,13 +359,17 @@ export default function DashboardOverview({ transactions, onSelectCategory }) {
             {stats.topMerchants.map((m, idx) => {
               const catMeta = CATEGORIES[m.categoryId] || CATEGORIES.MISC;
               return (
-                <div key={m.name} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
+                <div 
+                  key={m.name} 
+                  onClick={() => onSelectMerchant && onSelectMerchant(m.name)}
+                  className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-indigo-500/40 hover:bg-white/10 transition-all cursor-pointer group"
+                >
                   <div className="flex items-center space-x-3">
-                    <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-xs font-bold text-indigo-400">
+                    <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-xs font-bold text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                       #{idx + 1}
                     </div>
                     <div>
-                      <h4 className="text-sm font-semibold text-white truncate max-w-[200px] sm:max-w-[280px]">{m.name}</h4>
+                      <h4 className="text-sm font-semibold text-white group-hover:text-indigo-300 transition-colors truncate max-w-[200px] sm:max-w-[280px]">{m.name}</h4>
                       <div className="flex items-center space-x-2 text-xs text-slate-400">
                         <span className={`px-1.5 py-0.2 rounded text-[10px] border ${catMeta.badgeClass}`}>
                           {catMeta.name}

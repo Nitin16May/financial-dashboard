@@ -1,6 +1,7 @@
 import React from 'react';
 import { 
   LayoutDashboard, 
+  Store,
   PieChart, 
   CalendarRange, 
   ReceiptText, 
@@ -23,10 +24,12 @@ export default function Header({
 }) {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'merchant', label: 'Spend by Merchant', icon: Store },
     { id: 'category', label: 'Category Deep-Dive', icon: PieChart },
     { id: 'monthly', label: 'Date-to-Date Stats', icon: CalendarRange },
     { id: 'transactions', label: 'All Transactions', icon: ReceiptText }
   ];
+
 
   const presets = [
     { id: 'ALL', label: 'All Time' },
